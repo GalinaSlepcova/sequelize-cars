@@ -1,36 +1,52 @@
-const sequelize = require('./db');   
-const Car = require('./models/car');     
+const { sequelize, Brand, Car } = require('./models');
 
 async function main() {
   try {
     await sequelize.authenticate();
-    console.log(' Подключение к SQLite установлено.');
+    console.log('Вы вошли в базу данных.');
 
     await sequelize.sync({ force: true });
-    console.log(' Таблица cars синхронизирована.');
+    console.log('Таблицы brands и cars созданы (с внешним ключом brandId).');
 
-    await Car.bulkCreate([
-      { brand: 'Mercedes',   model: 'Mercedes-Benz', year: 2026, price: 27_500_000, isAvailable: true  },
-      { brand: 'Porsche', model: 'Porsche Cayman', year: 2018, price: 5_200_000, isAvailable: false },
-      { brand: 'Ferrari',    model: 'Ferrari F40',   year: 1989, price: 400_250_000, isAvailable: true  },
-    ]);
-    console.log('Внесено 3 автомобиля.');
+    
+    const ferrari   = await Brand.create({ name: 'Ferrari',   country: 'Italy', foundedYear: 1939 });
+    const mercedes_benz = await Brand.create({ name: 'Mercedes_benz', country: 'Germany',  foundedYear: 1926 });
 
-    const cars = await Car.findAll({ order: [['id', 'ASC']] });
-    console.log('\n Список автомобилей:');
-    console.table(cars.map((c) => ({
-      id: c.id, brand: c.brand, model: c.model,
-      year: c.year, price: c.price, isAvailable: c.isAvailable,
-    })));
+    
+    await ferrari.createCar({ model: 'F430 Spider',    year: 2007, price: 14_000_000, isAvailable: true  });
+    await ferrari.createCar({ model: '599 GTB Fiorano',      year: 2010, price:   15_000_000, isAvailable: false });
+    await ferrari.createCar({ model: 'SF90 Stradale',    year: 2021, price:   39_900_000, isAvailable: true  });
+
+    await mercedes_benz.createCar({ model: 'CLS AMG 63 AMG2',   year: 2014, price: 6_700_000, isAvailable: false });
+    await mercedes_benz.createCar({ model: 'AMG 63 AMG3', year: 2019, price: 12_000_000, isAvailable: true  });
+
+   
+    const ferrariCount = await ferrari.countCars();
+    console.log(`У марки ${ferrari.name} — ${ferrariCount} модел(и/ей).`);
+
+    const brands = await Brand.findAll({
+      include: [{ model: Car, as: 'cars' }],
+      order: [['id', 'ASC']],
+    });
+
+    for (const b of brands) {
+      console.log(`\n  ${b.name} (${b.country}, осн. ${b.foundedYear})`);
+      console.table(b.cars.map((c) => ({
+        id: c.id, model: c.model, year: c.year,
+        price: c.price, isAvailable: c.isAvailable, brandId: c.brandId,
+      })));
+    }
+    const F430_Spider = await Car.findOne({ where: { model: 'F430 Spider' } });
+    const F430_SpiderBrand = await F430_Spider.getBrand();
+    console.log(`\n ${F430_Spider.model} → марка: ${F430_SpiderBrand.name} (${F430_SpiderBrand.country})`);
 
   } catch (err) {
     console.error('Ошибка:', err);
     process.exitCode = 1;
-
   } finally {
     await sequelize.close();
-    console.log(' База данных закрыто.');
+    console.log('\nБаза данных закрыто.');
   }
 }
 
-main(); 
+main();
